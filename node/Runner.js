@@ -1082,24 +1082,32 @@ function createWindow() {
                 app.quit();
                 process.exit(0);
             } else {
-                exec(`"${exe}" ${args}`, { cwd: path.dirname(exe) }, (error, stdout, stderr) => {
+                let wrapper = process.platform == 'linux' ? `WINEPREFIX="${path.dirname(pathname)}/wine" "${__dirname}/umu-run" ` : ""
+                exec(`${wrapper}"${exe}" ${args}`, { cwd: path.dirname(exe) }, (error, stdout, stderr) => {
                     // Always restore originals after the game closes
                     GamePatching.restoreOriginalsIfAny(pathname);
                     win.show();
                     if (error != null) {
                         errorWin(error);
-                    }
-
-                    if (KeyValue.readUniqueFlag('outputDelta')) {
+                    } else if (KeyValue.readUniqueFlag('outputDelta')) {
                         var consoleFile = path.join(path.dirname(exe), '_console.txt');
                         var consoleContent = fs.readFileSync(consoleFile, 'utf8');
                         fs.unlinkSync(consoleFile);
-                        setSharedVar('deltaruneLogs', consoleContent);
+                        setSharedVar('deltaruneLogs', process.platform == 'linux' ? `UMU (Proton) LOGS\n===\n${stderr}\n\nDELTARUNE LOGS\n===\n${consoleContent}` : consoleContent);
                     }
                     win.webContents.send('audio', true);
                     win.webContents.send('page', (KeyValue.readUniqueFlag('outputDelta') ? 'deltalogs' : 'main'));
                     //win.webContents.executeJavaScript('openAudio(); page(\'main\');');
                 });
+                // TODO: create dialog box that shows the logs in real time so the user isnt staring at nothing 
+                if (process.platform == 'linux' && !KeyValue.readUniqueFlag('FIRST-TIME-SETUP-SHOWN')) {
+                    dialog.showMessageBoxSync({
+                        type: 'info',
+                        title: 'Wait a bit',
+                        message: `On first run of DELTARUNE without Steam, we need to download Proton first, so give it like 3-10 minutes. It may seem like nothings goes on, but it is.`,
+                    });
+                    KeyValue.writeUniqueFlag('FIRST-TIME-SETUP-SHOWN', true);
+                }
             }
         } catch (err) {
             errorWin('Coudn\'t patch and run Deltarune: ' + err.toString());
